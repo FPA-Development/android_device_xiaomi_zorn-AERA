@@ -25,17 +25,54 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import /init.recovery.prepdecrypt.rc
 import /init.recovery.wifi.rc
+import /init.recovery.cellular.rc
 
-on init
-    start vendor.boot-qti
-    setprop prepdecrypt.setpatch true
+# Release temporary stock /vendor and /odm overlays as soon as module loading
+# finishes so all recovery HALs execute from the recovery ramdisk instead of
+# the installed ROM's /vendor partition (which would pin /vendor busy and break
+# crypto/touch/vibrator HALs).
+service aera-restore-ramdisk /system/bin/sh -c "while grep -q '^/dev/block/.* /odm ' /proc/mounts; do umount -l /odm || exit 1; done; while grep -q '^/dev/block/.* /vendor ' /proc/mounts; do umount -l /vendor || exit 1; done; echo 'AERA: early vendor/odm overlay cleanup complete' > /dev/kmsg; setprop aera.ramdisk.ready 1"
+    user root
+    group root
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0
+
+service zorn-flashlight /system/bin/sh /system/bin/zorn_flashlight.sh
+    class core
+    disabled
+    user root
+    group root
+    seclabel u:r:recovery:s0
+
+service aera-otg-watch /system/bin/sh /system/bin/aera_otg_watch.sh
+    class main
+    disabled
+    user root
+    group root
+    seclabel u:r:recovery:s0
+
+service aera-gpu-ready /system/bin/sh /system/bin/aera_gpu_ready.sh
+    class core
+    disabled
+    oneshot
+    user root
+    group root
+    seclabel u:r:recovery:s0
+    stdio_to_kmsg
+
+on early-init
+    wait /sys/fs/selinux/enforce
+    write /sys/fs/selinux/enforce 0
 
 on early-fs
     write /proc/sys/walt/sched_lib_name "recovery,magiskboot,Updater,updater,update_engine_sideload"
     write /proc/sys/walt/sched_lib_mask_force 255
 
 on fs
+    export LD_LIBRARY_PATH /system/lib64:/vendor/lib64:/vendor/lib64/hw
     wait /dev/block/platform/soc/${ro.boot.bootdevice}
     symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
     write /proc/sys/kernel/firmware_config/force_sysfs_fallback 1
@@ -43,31 +80,79 @@ on fs
     chown system drmrpc /dev/qseecom
     chmod 0664 /dev/ion
     chown system system /dev/ion
+    mkdir /persist 0775 root system
     mkdir /mnt/vendor 0775 shell system
     mkdir /mnt/vendor/persist 0775 shell system
-    mkdir /tmp/persist 0775 shell system
-    mount none /tmp/persist /mnt/vendor/persist bind rec
+    wait /dev/block/bootdevice/by-name/persist 5
+    mount ext4 /dev/block/bootdevice/by-name/persist /persist noatime nosuid nodev barrier=1
+    mount none /persist /mnt/vendor/persist bind
     install_keyring
+
+on init
+    start vendor.boot-qti
+    setprop prepdecrypt.setpatch true
 
 on boot
     setprop sys.usb.config adb
+    chown system system /dev/xiaomi-touch
+    chmod 0660 /dev/xiaomi-touch
+    chown root wakelock /sys/power/wake_lock
+    chown root wakelock /sys/power/wake_unlock
+    chmod 0664 /sys/power/wake_lock
+    chmod 0664 /sys/power/wake_unlock
+    start zorn-flashlight
 
 on property:twrp.modules.loaded=true
-    # Mount firmware
-    mkdir /firmware
-    mount vfat /dev/block/bootdevice/by-name/modem${ro.boot.slot_suffix} /firmware ro
-    # Load ADSP firmware for PMIC
-    wait /sys/kernel/boot_adsp/boot
-    write /sys/kernel/boot_adsp/boot 1
-    # This make USB-OTG work
-    wait /sys/kernel/boot_adsp/ssr
-    write /sys/kernel/boot_adsp/ssr 1
-    wait /sys/class/power_supply/battery
-    start vendor.health-default
-    umount /firmware
+    # Unmount temporary stock /vendor & /odm before starting any vendor HAL.
+    start aera-restore-ramdisk
 
-on property:ro.crypto.state=encrypted && property:ro.boot.dynamic_partitions=true
+on property:aera.ramdisk.ready=1
+    # Mount modem firmware outside /vendor so packaged eSE trustlets in
+    # /vendor/firmware_mnt/image stay intact.
+    mkdir /firmware 0755 root shell
+    mount vfat /dev/block/bootdevice/by-name/modem${ro.boot.slot_suffix} /firmware ro shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337
+    # Prepare OS/SPL version properties and link remaining modem firmware.
     start prepdecrypt.vendor
+    # Load ADSP firmware for PMIC and USB-OTG.
+    wait /sys/kernel/boot_adsp/boot 5
+    write /sys/kernel/boot_adsp/boot 1
+    wait /sys/kernel/boot_adsp/ssr 2
+    write /sys/kernel/boot_adsp/ssr 1
+    wait /sys/class/power_supply/battery 2
+    start aera-otg-watch
+
+on property:aera.prepdecrypt.done=1 && property:aera.ramdisk.ready=1
+    # Start qseecomd only after prepdecrypt has restored ramdisk /vendor and set
+    # OS/SPL properties, preventing a race with temporary stock /vendor.
+    wait /dev/block/bootdevice/by-name/ssd 10
+    start vendor.qseecomd
+
+# Start QSEE/eSE/Weaver/KeyMint HALs as soon as QSEE listeners are up and
+# prepdecrypt has updated OS/SPL props, before crypto.ready=1 triggers
+# boot-time default_password auto-decrypt.
+on property:vendor.sys.listeners.registered=true && property:aera.prepdecrypt.done=1 && property:aera.ramdisk.ready=1
+    start vendor.ssgtzd
+    start vendor.gatekeeper_default
+    start vendor.secure_element
+    start vendor.weaver_nxp
+    start vendor.keymint-qti
+    start vendor.keymint-strongbox
+
+on property:crypto.ready=1 && property:aera.ramdisk.ready=1
+    # Ensure health, touch_report, and haptics always start even if QSEE
+    # listeners time out.
+    start vendor.health-default
+    start touch_report
+    start vibratorfeature-hal-service
 
 on property:hwservicemanager.ready=true
     setprop sys.boot_completed 1
+
+# Restart ssgtzd once /data is decrypted so /data/vendor/qwes and PFM
+# Smart Transmit license checks succeed for cellular MPSS, and load Adreno 750
+# KGSL (/dev/kgsl-3d0) for sandboxed plugins such as AERA Browser.
+on property:post.decrypt.modules=true && property:aera.ramdisk.ready=1
+    mkdir /data/vendor/qwes 0755 system system
+    chown system system /data/vendor/qwes
+    restart vendor.ssgtzd
+    start aera-gpu-ready

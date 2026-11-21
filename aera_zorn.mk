@@ -1,0 +1,67 @@
+#
+# Copyright (C) 2025 The OrangeFox Recovery Project
+# Copyright (C) 2026 AERA Recovery Project contributors
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Maintainer
+AERA_MAINTAINER := FPA-Development
+
+# Screen settings (POCO F7 Pro / Redmi K80: 1440x3200 QHD+, 20:9 aspect ratio)
+# Logical canvas 1080x2400 scales 4:3 -> exact 1440x3200 native panel metrics.
+AERA_UI_ADAPTIVE_RESOLUTION := true
+AERA_SCREEN_H := 2400
+AERA_STATUS_H := 128
+AERA_HIDE_NOTCH := 1
+AERA_CLOCK_POS := 1
+AERA_STATUS_INDENT_LEFT := 56
+AERA_STATUS_INDENT_RIGHT := 48
+AERA_ALLOW_DISABLE_NAVBAR := 0
+AERA_USE_GREEN_LED := 0
+
+# Partition and backup settings
+AERA_QUICK_BACKUP_LIST := /boot;/data;
+AERA_ENABLE_LPTOOLS := 1
+AERA_NO_TREBLE_COMPATIBILITY_CHECK := 1
+AERA_DYNAMIC_FULL_SIZE := 8321499136
+AERA_OPTIONS_LIST_NUM := 11
+
+# A/B with dedicated recovery partition
+AERA_AB_DEVICE_WITH_RECOVERY_PARTITION := 1
+
+# Data format handling
+AERA_UNBIND_SDCARD_F2FS := 1
+AERA_WIPE_METADATA_AFTER_DATAFORMAT := 1
+AERA_BIND_MOUNT_SDCARD_ON_FORMAT := 1
+AERA_UNMOUNT_SDCARDS_BEFORE_REBOOT := 1
+AERA_LOOP_DEVICE_ERRORS_TO_LOG := 1
+AERA_USE_LZ4_COMPRESSION := 1
+AERA_ENABLE_ALL_PARTITION_TOOLS := 1
+
+ifeq ($(FIXED_DECRYPT),false)
+    # Set to 1 to skip FBE decryption routines when device-specific crypto hangs.
+    AERA_SKIP_FBE_DECRYPTION := 1
+endif
+
+AERA_USE_LOCKSCREEN_BUTTON := 1
+AERA_USE_DMCTL := 1
+AERA_DEFAULT_TIMEZONE := GMT0;BST,M3.5.0,M10.5.0
+AERA_FORCE_PREBUILT_KERNEL := 1
+AERA_USE_AIDL_BOOT_CONTROL := 1
+AERA_DISABLE_ORS_AUTO_REBOOT := 1
+AERA_FORCE_DATA_FORMAT_F2FS := 1
+AERA_ENABLE_FRP_WIPE := 1
+AERA_FORCE_CASEFOLDING := 1
+AERA_BLOCK_OPERATIONS_AFTER_ROM_FLASH := 1
+
+# Flashlight (dual LED workaround via /system/bin/zorn_flashlight.sh)
+AERA_FLASHLIGHT_ENABLE := 1
+AERA_FL_PATH1 := /tmp/flashlight
+
+# Only ship root-provider modules matching zorn's GKI 6.1 kernel
+AERA_ROOT_MODULE_KERNELS := 6.1
+
+# Enable Wi-Fi (SM8650 cnss-kiwi / kiwi_v2) and Mobile Data support
+AERA_ENABLE_WLAN := 1
+AERA_ENABLE_MOBILE_DATA ?= 1

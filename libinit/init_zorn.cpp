@@ -1,6 +1,7 @@
 /*
    Copyright (c) 2015, The Linux Foundation. All rights reserved.
    Copyright (C) 2020 The OmniRom Project.
+   Copyright (C) 2026 AERA Recovery Project contributors.
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
    met:
@@ -26,71 +27,55 @@
    IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <android-base/properties.h>
+#include <string>
 #include <android-base/logging.h>
-#include <cutils/android_reboot.h>
-#include <thread>
-#include <sys/resource.h>
+#include <android-base/properties.h>
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <sys/_system_properties.h>
 
 using android::base::GetProperty;
-using android::base::SetProperty;
+
+namespace {
 
 void property_override(const std::string& name, const std::string& value) {
-	size_t valuelen = value.size();
-
-	prop_info* pi = (prop_info*) __system_property_find(name.c_str());
-	if (pi != nullptr) {
-		__system_property_update(pi, value.c_str(), valuelen);
-	} else {
-		int rc = __system_property_add(name.c_str(), name.size(), value.c_str(), valuelen);
-		if (rc < 0) {
-			LOG(ERROR) << "property_set(\"" << name << "\", \"" << value << "\") failed: "
-				<< "__system_property_add failed";
-		}
-	}
+    prop_info* pi = const_cast<prop_info*>(__system_property_find(name.c_str()));
+    if (pi != nullptr) {
+        __system_property_update(pi, value.c_str(), value.size());
+    } else {
+        int rc = __system_property_add(name.c_str(), name.size(), value.c_str(), value.size());
+        if (rc < 0) {
+            LOG(ERROR) << "property_override(\"" << name << "\", \"" << value
+                       << "\") failed: __system_property_add returned " << rc;
+        }
+    }
 }
 
-void model_property_override(const std::string& device, const std::string& name, const std::string& model) {
-	property_override("ro.build.product", device);
-	property_override("ro.product.device", device);
-	property_override("ro.product.odm.device", device);
-	property_override("ro.product.vendor.device", device);
-	property_override("ro.product.product.device", device);
-	property_override("ro.product.system_ext.device", device);
-	property_override("ro.product.system.device", device);
-	property_override("ro.product.bootimage.device", device);
-	property_override("ro.product.name", name);
-	property_override("ro.product.odm.name", name);
-	property_override("ro.product.vendor.name", name);
-	property_override("ro.product.product.name", name);
-	property_override("ro.product.system_ext.name", name);
-	property_override("ro.product.system.name", name);
-	property_override("ro.product.model", model);
-	property_override("ro.product.odm.model", model);
-	property_override("ro.product.vendor.model", model);
-	property_override("ro.product.product.model", model);
-	property_override("ro.product.system_ext.model", model);
-	property_override("ro.product.system.model", model);
+void model_property_override(const std::string& device,
+                             const std::string& name,
+                             const std::string& brand,
+                             const std::string& model) {
+    static const char* const kPartitions[] = {
+        "", "odm.", "vendor.", "product.", "system_ext.", "system.", "bootimage."
+    };
+
+    property_override("ro.build.product", device);
+    for (const char* part : kPartitions) {
+        const std::string prefix = std::string("ro.product.") + part;
+        property_override(prefix + "device", device);
+        property_override(prefix + "name", name);
+        property_override(prefix + "brand", brand);
+        property_override(prefix + "model", model);
+    }
 }
+
+}  // namespace
 
 void vendor_load_properties() {
-	property_override("ro.bootimage.build.date.utc", "1672502400");
-	property_override("ro.build.date.utc", "1672502400");
-	const std::string sku = GetProperty("ro.boot.hardware.sku", "");
+    const std::string hwc = GetProperty("ro.boot.hwc", "");
 
-#if defined (TW_RELEASE_DEVICE_ZORN)
-	if (sku == "zorn") {
-		model_property_override("zorn", "zorn", "Redmi K80");
-	} else {
-		model_property_override("unknow", "unknow", "unknow name");
-	}
-#else
-#error device name is not found!
-#endif
+    if (hwc == "CN") {
+        model_property_override("zorn", "zorn", "Redmi", "Redmi K80");
+    } else {
+        model_property_override("zorn", "zorn_global", "POCO", "POCO F7 Pro");
+    }
 }

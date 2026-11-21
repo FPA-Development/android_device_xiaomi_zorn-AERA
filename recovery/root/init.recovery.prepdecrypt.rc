@@ -1,0 +1,8 @@
+# Explicitly imported by init.recovery.qcom.rc. Neither the service definition
+# nor its script depends on the temporarily overlaid /vendor partition.
+service prepdecrypt.vendor /system/bin/sh /system/bin/aera-prepdecrypt.sh
+    user root
+    group root
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0

@@ -1,0 +1,8 @@
+// WLAN MAC provisioning helper for POCO F7 Pro / Redmi K80 (zorn / kiwi_v2)
+cc_binary {
+    name: "aera-zorn-wlan-mac",
+    srcs: ["aera_zorn_wlan_mac.c"],
+    recovery: true,
+    stl: "none",
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}

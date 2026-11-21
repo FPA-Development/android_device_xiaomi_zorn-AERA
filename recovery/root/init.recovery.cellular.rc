@@ -1,0 +1,12 @@
+# Qualcomm cellular data provider is started on demand by the AERA UI.
+service aera-zorn-cellular /system/bin/aera-cellular-provider
+    class main
+    disabled
+    oneshot
+    user root
+    group root inet net_admin net_raw
+    seclabel u:r:recovery:s0
+    stdio_to_kmsg
+
+on property:crypto.ready=1 && property:aera.ramdisk.ready=1
+    start aera-zorn-cellular
