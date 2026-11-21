@@ -191,7 +191,7 @@ AERA_EXCLUDE_APEX := true
 AERA_HAS_EDL_MODE := true
 
 # Haptics
-FIXED_HAPTICS := true
+FIXED_HAPTICS := false
 
 ifeq ($(FIXED_HAPTICS),true)
     AERA_SUPPORT_INPUT_AIDL_HAPTICS := true

@@ -139,14 +139,11 @@ on property:vendor.sys.listeners.registered=true && property:aera.prepdecrypt.do
     start vendor.keymint-strongbox
 
 on property:crypto.ready=1 && property:aera.ramdisk.ready=1
-    # Ensure health, touch_report, and haptics always start even if QSEE
-    # listeners time out.
+    # Ensure health and touch_report always start even if QSEE listeners time out.
+    # Do not start vibratorfeature-hal-service: it dlopens /odm/lib64/*.so and
+    # pins the odm dm device, blocking Unmap_Super_Devices() during Format Data.
     start vendor.health-default
     start touch_report
-    start vibratorfeature-hal-service
-
-on property:hwservicemanager.ready=true
-    setprop sys.boot_completed 1
 
 # Restart ssgtzd once /data is decrypted so /data/vendor/qwes and PFM
 # Smart Transmit license checks succeed for cellular MPSS, and load Adreno 750

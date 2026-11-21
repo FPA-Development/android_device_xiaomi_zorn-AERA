@@ -1,12 +1,28 @@
 #!/system/bin/sh
-# Ensure RFKill is available before WLAN or audio modules
+# Ensure RFKill is available before WLAN or audio modules, and cleanly unmount
+# system_dlkm afterwards so logical dm devices are never left pinned before
+# Format Data / Super unmapping.
 
 SCRIPT_NAME="$(basename "$0")"
+MOUNTED_BY_US=""
+
 LOGMSG() {
     echo "I:$@" >> /tmp/recovery.log
 }
 
+cleanup_mount() {
+    if [ -n "$MOUNTED_BY_US" ]; then
+        umount "$MOUNTED_BY_US" 2>/dev/null || umount -l "$MOUNTED_BY_US" 2>/dev/null || true
+        if [ "$MOUNTED_BY_US" = "/mnt/aera-rfkill-system_dlkm" ]; then
+            rmdir "$MOUNTED_BY_US" 2>/dev/null || true
+        fi
+        LOGMSG "Unmounted $MOUNTED_BY_US"
+        MOUNTED_BY_US=""
+    fi
+}
+
 finish() {
+    cleanup_mount
     LOGMSG "---$SCRIPT_NAME end---"
     exit "$1"
 }
@@ -38,6 +54,7 @@ ROOT=/system_dlkm
 if ! grep -q " $ROOT " /proc/mounts; then
     mount "$ROOT"
     if grep -q " $ROOT " /proc/mounts; then
+        MOUNTED_BY_US="$ROOT"
         LOGMSG "Mounted $ROOT through recovery"
     else
         LOGMSG "Recovery mount of /system_dlkm unavailable; trying active-slot fallback"
@@ -49,6 +66,7 @@ if ! grep -q " $ROOT " /proc/mounts; then
             mount -t erofs -o ro "$PART" "$ROOT" || \
                 mount -t ext4 -o ro "$PART" "$ROOT" || \
                 fail "Could not mount $PART"
+            MOUNTED_BY_US="$ROOT"
             LOGMSG "Mounted $PART read-only at $ROOT"
         fi
     fi
