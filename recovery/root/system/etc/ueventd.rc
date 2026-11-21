@@ -2,7 +2,7 @@ import /vendor/etc/ueventd.rc
 import /odm/etc/ueventd.rc
 
 # MIUI MOD: WIFI_VendorApex
-firmware_directories /apex/com.xiaomi.wifi/etc/ /etc/firmware/ /odm/firmware/ /vendor/firmware/ /firmware/image/
+firmware_directories /apex/com.xiaomi.wifi/etc/ /etc/firmware/ /lib/firmware/ /odm/firmware/ /vendor/firmware/ /firmware/image/
 # END WIFI_VendorApex
 uevent_socket_rcvbuf_size 16M
 
@@ -53,7 +53,7 @@ subsystem vfio
 /dev/vfio/*               0666   root       root
 
 /dev/pmsg0                0222   root       log
-/dev/dma_heap/system      0444   system     system
+/dev/dma_heap/system      0666   system     system
 /dev/dma_heap/system-uncached      0444   system     system
 /dev/dma_heap/system-secure        0444   system     system
 
